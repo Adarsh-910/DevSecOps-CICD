@@ -3,18 +3,21 @@ provider "aws" {
 }
 
 # --- Bucket to store access logs ---
+# We are ignoring the logging check because you don't enable logging on a log bucket.
+# tfsec:ignore:aws-s3-enable-bucket-logging
 resource "aws_s3_bucket" "log_bucket" {
   bucket = "your-unique-devsecops-log-bucket-2025" # CHANGE TO A UNIQUE NAME
 }
 
 # --- Secure the Log Bucket ---
-# Fixes versioning, encryption, and public access issues for the log_bucket.
 resource "aws_s3_bucket_versioning" "log_bucket_versioning" {
   bucket = aws_s3_bucket.log_bucket.id
   versioning_configuration {
     status = "Enabled"
   }
 }
+# Ignoring the advanced encryption check for the log bucket. AES256 is sufficient.
+# tfsec:ignore:aws-s3-encryption-customer-key
 resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryption" {
   bucket = aws_s3_bucket.log_bucket.id
   rule {
@@ -43,7 +46,6 @@ resource "aws_s3_bucket_versioning" "example_versioning" {
     status = "Enabled"
   }
 }
-
 # This comment tells tfsec to ignore the recommendation for a customer-managed key.
 # tfsec:ignore:aws-s3-encryption-customer-key
 resource "aws_s3_bucket_server_side_encryption_configuration" "example_encryption" {
@@ -54,7 +56,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "example_encryptio
     }
   }
 }
-
 resource "aws_s3_bucket_public_access_block" "example_pab" {
   bucket                  = aws_s3_bucket.example.id
   block_public_acls       = true
@@ -62,7 +63,6 @@ resource "aws_s3_bucket_public_access_block" "example_pab" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
-
 resource "aws_s3_bucket_logging" "example_logging" {
   bucket        = aws_s3_bucket.example.id
   target_bucket = aws_s3_bucket.log_bucket.id
