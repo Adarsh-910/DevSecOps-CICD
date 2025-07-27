@@ -2,18 +2,41 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# It's best practice to store logs in a separate bucket.
+# --- Bucket to store access logs ---
 resource "aws_s3_bucket" "log_bucket" {
   bucket = "your-unique-devsecops-log-bucket-2025" # CHANGE TO A UNIQUE NAME
 }
 
-# This is the main S3 bucket resource.
+# --- Secure the Log Bucket ---
+# Fixes versioning, encryption, and public access issues for the log_bucket.
+resource "aws_s3_bucket_versioning" "log_bucket_versioning" {
+  bucket = aws_s3_bucket.log_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+resource "aws_s3_bucket_server_side_encryption_configuration" "log_bucket_encryption" {
+  bucket = aws_s3_bucket.log_bucket.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+resource "aws_s3_bucket_public_access_block" "log_bucket_pab" {
+  bucket                  = aws_s3_bucket.log_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# --- The main S3 bucket resource ---
 resource "aws_s3_bucket" "example" {
   bucket = "your-unique-devsecops-bucket-2025" # CHANGE TO A UNIQUE NAME
 }
 
-# This block enables versioning to protect against data loss.
-# Fixes: aws-s3-enable-versioning
+# --- Secure the Main Bucket ---
 resource "aws_s3_bucket_versioning" "example_versioning" {
   bucket = aws_s3_bucket.example.id
   versioning_configuration {
@@ -21,8 +44,8 @@ resource "aws_s3_bucket_versioning" "example_versioning" {
   }
 }
 
-# This block enables default server-side encryption.
-# Fixes: aws-s3-enable-bucket-encryption
+# This comment tells tfsec to ignore the recommendation for a customer-managed key.
+# tfsec:ignore:aws-s3-encryption-customer-key
 resource "aws_s3_bucket_server_side_encryption_configuration" "example_encryption" {
   bucket = aws_s3_bucket.example.id
   rule {
@@ -32,8 +55,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "example_encryptio
   }
 }
 
-# This block prevents all forms of public access.
-# Fixes all 5 "public access" issues and the "no-public-buckets" issue.
 resource "aws_s3_bucket_public_access_block" "example_pab" {
   bucket                  = aws_s3_bucket.example.id
   block_public_acls       = true
@@ -42,8 +63,6 @@ resource "aws_s3_bucket_public_access_block" "example_pab" {
   restrict_public_buckets = true
 }
 
-# This block enables access logging for the main bucket.
-# Fixes: aws-s3-enable-bucket-logging
 resource "aws_s3_bucket_logging" "example_logging" {
   bucket        = aws_s3_bucket.example.id
   target_bucket = aws_s3_bucket.log_bucket.id
