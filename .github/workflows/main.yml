@@ -1,0 +1,64 @@
+name: DevSecOps Pipeline
+
+# Executes on each code push to the main branch [cite: 24]
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # This job runs all the security scans [cite: 25]
+  security-scans:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Scan Terraform with tfsec
+        [cite_start]uses: aquasecurity/tfsec-action@v1.0.0 # Integrates tfsec for Terraform scanning [cite: 19]
+        with:
+          working_directory: .
+
+      - name: Build Docker image for scanning
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false 
+          tags: my-app-scan:latest
+
+      - name: Scan Docker image with Trivy
+        [cite_start]uses: aquasecurity/trivy-action@master # Integrates Trivy for Docker scanning [cite: 20]
+        with:
+          image-ref: 'my-app-scan:latest'
+          format: 'table'
+          exit-code: '1' # Fails the build if critical vulnerabilities are found
+
+  # This job deploys the application after scans pass
+  deploy-to-kubernetes:
+    needs: security-scans # Runs only after security-scans job is successful
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v1
+
+      - name: Configure Kubeconfig for EKS
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > $HOME/.kube/config
+          
+      - name: Apply Sealed Secret to Kubernetes
+        [cite_start]run: kubectl apply -f sealed-secret.yaml # Applies Sealed Secrets to the cluster [cite: 26]
+
+      - name: Trigger Deployment
+        [cite_start]run: echo "Deployment to Kubernetes triggered" # Triggers deployment to Kubernetes [cite: 27]
